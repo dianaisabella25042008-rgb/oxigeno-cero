@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>OXÍGENO CERO</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&family=Special+Elite&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --verde:      #39ff8c;
+      --verde-vivo: #00ff7a;
+      --cian:       #2bd9ff;
+      --oscuro:     #04070a;
+      --panel:      #0a1410;
+      --gris:       #2a3a36;
+      --texto:      #9fc9b8;
+      --acento:     #0e3a2a;
+      --alerta:     #ff4d2b;
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      background: var(--oscuro);
+      overflow: hidden;
+      width: 100vw; height: 100vh;
+      font-family: 'Share Tech Mono', monospace;
+      cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Ccircle cx='10' cy='10' r='4' fill='%2339ff8c' fill-opacity='0.7'/%3E%3C/svg%3E") 10 10, crosshair;
+    }
+
+    /* ── CANVAS FONDO ── */
+    #bg-canvas {
+      position: fixed; top:0; left:0;
+      width:100%; height:100%;
+      z-index: 0; pointer-events:none;
+    }
+
+    /* ── SCANLINES ── */
+    body::after {
+      content:'';
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent, transparent 2px,
+        rgba(0,0,0,0.10) 2px, rgba(0,0,0,0.10) 4px
+      );
+      z-index:1; pointer-events:none;
+    }
+
+    /* ── SCREENS ── */
+    .screen {
+      position: fixed; top:0; left:0;
+      width:100%; height:100%;
+      display: flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      z-index: 10;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.5s ease;
+    }
+    .screen.active {
+      opacity: 1; pointer-events: all;
+    }
+
+    /* ── HUD NIVEL DE OXÍGENO ── */
+    #o2-hud {
+      position: fixed; top: 22px; right: 28px;
+      z-index: 5; text-align: right;
+      font-family: 'Share Tech Mono', monospace;
+      letter-spacing: 2px; pointer-events:none;
+    }
+    #o2-hud .o2-label {
+      font-size: 11px; color: #4a6a5a;
+      letter-spacing: 4px; text-transform: uppercase;
+    }
+    #o2-hud .o2-value {
+      font-size: 22px; color: var(--verde-vivo);
+      text-shadow: 0 0 10px rgba(57,255,140,0.6);
+    }
+    #o2-hud .o2-bar {
+      margin-top: 6px; width: 140px; height: 6px;
+      border: 1px solid var(--acento);
+      background: rgba(57,255,140,0.05);
+      position: relative; overflow:hidden;
+    }
+    #o2-hud .o2-bar::before {
+      content:'';
+      position:absolute; top:0; left:0; height:100%;
+      width: 71%;
+      background: linear-gradient(90deg, var(--verde), var(--cian));
+      animation: o2-flicker 5s infinite;
+      box-shadow: 0 0 10px rgba(57,255,140,0.5);
+    }
+    @keyframes o2-flicker {
+      0%,100% { width:71%; opacity:1; }
+      48%     { width:71%; opacity:1; }
+      50%     { width:69%; opacity:0.7; }
+      52%     { width:71%; opacity:1; }
+    }
+
+    /* ── TÍTULO ── */
+    #main-title {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: clamp(52px, 9vw, 110px);
+      color: var(--verde-vivo);
+      letter-spacing: 14px;
+      text-transform: uppercase;
+      animation: glitch 5s infinite;
+      margin-bottom: 6px;
+      position: relative;
+      user-select: none;
+      text-shadow: 0 0 18px rgba(57,255,140,0.35);
+    }
+    #main-title::before {
+      content: 'OXÍGENO CERO';
+      position: absolute; top:0; left:0; width:100%;
+      color: var(--cian); opacity:0;
+      animation: glitch-top 5s infinite;
+      clip-path: polygon(0 0, 100% 0, 100% 40%, 0 40%);
+    }
+    #main-title::after {
+      content: 'OXÍGENO CERO';
+      position: absolute; top:0; left:0; width:100%;
+      color: var(--alerta); opacity:0;
+      animation: glitch-bot 5s infinite;
+      clip-path: polygon(0 60%, 100% 60%, 100% 100%, 0 100%);
+    }
+
+    @keyframes glitch {
+      0%,85%,100% { text-shadow: 0 0 18px rgba(57,255,140,0.35); transform: none; }
+      86%    { transform: skewX(1deg); text-shadow: -3px 0 var(--cian), 3px 0 var(--alerta); }
+      88%    { transform: skewX(-0.5deg); }
+      90%    { transform: none; text-shadow: 0 0 18px rgba(57,255,140,0.35); }
+      92%    { transform: skewX(0.3deg); text-shadow: 2px 0 var(--cian); }
+      94%    { transform: none; }
+    }
+    @keyframes glitch-top {
+      0%,85%,100% { opacity:0; transform:none; }
+      86%  { opacity:0.7; transform: translateX(-4px); }
+      88%  { opacity:0; }
+      92%  { opacity:0.5; transform: translateX(3px); }
+      94%  { opacity:0; }
+    }
+    @keyframes glitch-bot {
+      0%,85%,100% { opacity:0; transform:none; }
+      87%  { opacity:0.6; transform: translateX(4px); }
+      89%  { opacity:0; }
+      93%  { opacity:0.4; transform: translateX(-3px); }
+      95%  { opacity:0; }
+    }
+
+    .subtitle {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 13px;
+      color: #4a6a5a;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 60px;
+      animation: flicker 6s infinite;
+    }
+
+    @keyframes flicker {
+      0%,100%  { opacity:1; }
+      92%      { opacity:1; }
+      93%      { opacity:0.4; }
+      94%      { opacity:1; }
+      97%      { opacity:0.6; }
+      98%      { opacity:1; }
+    }
+
+    /* ── MENU ITEMS ── */
+    .menu-items {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 10px;
+    }
+
+    .menu-btn {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 500;
+      font-size: clamp(16px, 2.2vw, 21px);
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: var(--texto);
+      background: none; border: none;
+      cursor: pointer;
+      padding: 10px 40px;
+      position: relative;
+      transition: color 0.2s, transform 0.2s;
+      text-shadow: 0 0 8px rgba(57,255,140,0.2);
+    }
+    .menu-btn::before {
+      content: '';
+      position: absolute; bottom: 4px; left: 0;
+      width: 0; height: 1px;
+      background: var(--verde-vivo);
+      transition: width 0.3s ease;
+      box-shadow: 0 0 6px var(--verde-vivo);
+    }
+    .menu-btn:hover {
+      color: #fff;
+      transform: translateX(6px);
+      text-shadow: 0 0 15px var(--verde-vivo), 0 0 30px rgba(57,255,140,0.4);
+    }
+    .menu-btn:hover::before { width: 100%; }
+
+    .menu-btn.continuar {
+      color: var(--verde-vivo);
+      font-size: clamp(18px, 2.6vw, 24px);
+      text-shadow: 0 0 12px var(--verde-vivo);
+      animation: pulse-green 2s infinite;
+    }
+    .menu-btn.continuar::after {
+      content: ' ►';
+      font-size: 0.7em;
+    }
+    @keyframes pulse-green {
+      0%,100% { text-shadow: 0 0 12px var(--verde-vivo); }
+      50%     { text-shadow: 0 0 25px var(--verde-vivo), 0 0 40px rgba(57,255,140,0.4); }
+    }
+
+    .menu-btn.cerrar { color: #5a6a62; font-size: clamp(13px, 1.8vw, 17px); }
+    .menu-btn.cerrar:hover { color: var(--alerta); text-shadow: 0 0 12px rgba(255,77,43,0.5); }
+
+    /* ── SEPARADOR ── */
+    .sep {
+      width: 180px; height: 1px;
+      background: linear-gradient(to right, transparent, var(--acento), transparent);
+      margin: 8px 0;
+    }
+
+    /* ── FOOTER ── */
+    .menu-footer {
+      position: fixed; bottom: 20px;
+      font-size: 11px; letter-spacing: 3px;
+      color: #2a3a34; text-transform: uppercase;
+      animation: flicker 8s infinite;
+    }
+
+    /* ─────────────────────────────────────────────── */
+    /* ── PANTALLA SLOTS ── */
+    /* ─────────────────────────────────────────────── */
+    #save-screen { background: rgba(2,5,4,0.95); }
+
+    .screen-title {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      font-size: 30px; letter-spacing:8px;
+      color: var(--verde-vivo); margin-bottom: 30px;
+      text-shadow: 0 0 20px rgba(57,255,140,0.4);
+    }
+
+    .slots-container {
+      display: flex; flex-direction: column;
+      gap: 12px; width: min(520px, 90vw);
+    }
+
+    .slot {
+      border: 1px solid var(--acento);
+      background: rgba(8,18,14,0.8);
+      padding: 16px 20px;
+      cursor: pointer;
+      transition: all 0.25s;
+      position: relative;
+      overflow: hidden;
+      font-family: 'Share Tech Mono', monospace;
+    }
+    .slot::before {
+      content:'';
+      position:absolute; top:0; left:-100%;
+      width:100%; height:100%;
+      background: linear-gradient(90deg, transparent, rgba(57,255,140,0.08), transparent);
+      transition: left 0.4s;
+    }
+    .slot:hover::before { left:100%; }
+    .slot:hover {
+      border-color: var(--verde);
+      box-shadow: 0 0 15px rgba(57,255,140,0.25), inset 0 0 15px rgba(57,255,140,0.05);
+    }
+
+    .slot.used { border-color: #1a3a2e; }
+    .slot.used:hover { border-color: var(--verde-vivo); }
+
+    .slot.empty {
+      border-style: dashed; border-color: #14241c;
+      opacity: 0.6;
+    }
+    .slot.empty:hover { opacity: 1; border-color: #2a4a3a; }
+
+    .slot-header {
+      display: flex; justify-content: space-between;
+      align-items: center;
+    }
+    .slot-num {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px; color: var(--verde);
+      letter-spacing: 3px;
+    }
+    .slot-date { font-size: 11px; color: #3a4a44; }
+
+    .slot-info {
+      margin-top: 8px;
+      display: flex; gap: 20px;
+      font-size: 12px; color: #6a8a7a;
+      letter-spacing: 1px;
+    }
+    .slot-info span::before { color: var(--verde); margin-right:4px; }
+
+    .slot-empty-text {
+      font-size: 13px; color: #2a4a3a;
+      letter-spacing: 4px; text-align: center;
+      text-transform: uppercase;
+    }
+    .slot-new-badge {
+      font-size: 10px; color: #3a5a4a;
+      letter-spacing: 3px; text-transform: uppercase;
+    }
+
+    /* ── BOTÓN BORRAR SLOT ── */
+    .slot-delete {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px; letter-spacing: 1px;
+      color: #7a4a3a; background: none;
+      border: 1px solid #4a2a1e;
+      padding: 2px 6px; cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+    .slot-delete:hover {
+      color: var(--alerta);
+      border-color: var(--alerta);
+      box-shadow: 0 0 6px rgba(255,77,43,0.3);
+    }
+
+    .back-btn {
+      margin-top: 24px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 13px; letter-spacing: 4px;
+      color: #3a5a4a; background:none; border:none;
+      cursor:pointer; text-transform:uppercase;
+      transition: color 0.2s;
+    }
+    .back-btn:hover { color: var(--verde); }
+
+    /* ─────────────────────────────────────────────── */
+    /* ── CONTROLES ── */
+    /* ─────────────────────────────────────────────── */
+    #controls-screen { background: rgba(2,5,4,0.95); }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 40px;
+      width: min(560px, 90vw);
+      margin-bottom: 30px;
+      max-height: 56vh;
+      overflow-y: auto;
+      padding-right: 6px;
+    }
+    .ctrl-item {
+      display: flex; align-items: center; gap: 14px;
+      border-bottom: 1px solid #102018;
+      padding-bottom: 12px;
+    }
+    .ctrl-key {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px; color: var(--verde-vivo);
+      min-width: 60px; text-align: center;
+      padding: 4px 8px;
+      border: 1px solid var(--acento);
+      background: rgba(57,255,140,0.06);
+      letter-spacing: 1px;
+      text-shadow: 0 0 8px rgba(57,255,140,0.4);
+    }
+    .ctrl-desc {
+      font-size: 13px; color: #7a9a8a;
+      letter-spacing: 2px; text-transform: uppercase;
+    }
+    .ctrl-note {
+      font-size: 11px; color: #2a4a3a;
+      text-align: center; letter-spacing: 3px;
+      text-transform: uppercase; margin-top: 8px;
+    }
+
+    /* ─────────────────────────────────────────────── */
+    /* ── PANTALLA CIERRE ── */
+    /* ─────────────────────────────────────────────── */
+    #close-screen {
+      background: #000;
+      flex-direction:column; gap:20px;
+    }
+    .close-msg {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      font-size: clamp(22px,3.4vw,40px);
+      color: var(--alerta);
+      letter-spacing: 6px;
+      text-align:center;
+      max-width:640px;
+      line-height: 1.6;
+      animation: flicker 3s infinite;
+    }
+    .close-sub {
+      font-size: 13px; color: #2a3a34;
+      letter-spacing: 4px; text-transform:uppercase;
+    }
+    .close-back {
+      margin-top: 40px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px; color: #2a4a3a;
+      letter-spacing: 4px; background:none; border:none;
+      cursor:pointer; text-transform:uppercase;
+      transition: color 0.3s;
+    }
+    .close-back:hover { color: var(--verde); }
+
+    /* ─────────────────────────────────────────────── */
+    /* ── CONFIRM DIALOG ── */
+    /* ─────────────────────────────────────────────── */
+    #confirm-overlay {
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      background:rgba(0,0,0,0.85);
+      z-index:100;
+      display:none; align-items:center; justify-content:center;
+    }
+    #confirm-overlay.active { display:flex; }
+    .confirm-box {
+      border: 1px solid var(--verde);
+      background: #06120d;
+      padding: 36px 48px;
+      text-align: center;
+      box-shadow: 0 0 30px rgba(57,255,140,0.25);
+      max-width: 380px; width:90%;
+    }
+    .confirm-box h3 {
+      font-family: 'Orbitron', sans-serif;
+      color: var(--verde-vivo);
+      font-size: 19px; letter-spacing:4px;
+      margin-bottom:12px;
+    }
+    .confirm-box p {
+      font-family: 'Share Tech Mono', monospace;
+      color: #7a9a8a; font-size:13px;
+      letter-spacing:2px; margin-bottom:28px;
+      line-height:1.6;
+    }
+    .confirm-btns { display:flex; gap:16px; justify-content:center; }
+    .confirm-yes, .confirm-no {
+      font-family:'Orbitron',sans-serif;
+      font-size:16px; letter-spacing:4px;
+      padding:8px 28px; border:1px solid;
+      cursor:pointer; background:none;
+      transition: all 0.2s;
+    }
+    .confirm-yes {
+      color:var(--verde-vivo); border-color:var(--verde);
+    }
+    .confirm-yes:hover {
+      background:rgba(57,255,140,0.12);
+      box-shadow:0 0 12px rgba(57,255,140,0.35);
+    }
+    .confirm-no {
+      color:#4a5a54; border-color:#2a3a34;
+    }
+    .confirm-no:hover { color:#8a9a92; border-color:#4a5a54; }
+
+    /* ── VAPOR / FUGA DE GAS deco ── */
+    .vent {
+      position:fixed; top:0;
+      width:2px;
+      background:linear-gradient(to bottom, rgba(57,255,140,0.5), rgba(43,217,255,0.15), rgba(57,255,140,0));
+      animation: vent-rise linear infinite;
+      z-index:2; pointer-events:none;
+      filter: blur(0.5px);
+    }
+    @keyframes vent-rise {
+      0%  { transform:translateY(100vh) scaleY(0.6); opacity:0; }
+      15% { opacity:0.6; }
+      100%{ transform:translateY(-20vh) scaleY(1.4); opacity:0; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<!-- ── HUD DE OXÍGENO (decorativo, ambientación) ── -->
+<div id="o2-hud">
+  <div class="o2-label">Nivel de O₂ — Sector 7</div>
+  <div class="o2-value">0.71 ppm</div>
+  <div class="o2-bar"></div>
+</div>
+
+<!-- ── FUGAS DE GAS DECORATIVAS ── -->
+<div class="vent" style="left:9%;  height:140px; animation-duration:9s;  animation-delay:1s;"></div>
+<div class="vent" style="left:24%; height:90px;  animation-duration:13s; animation-delay:4s;"></div>
+<div class="vent" style="left:66%; height:160px; animation-duration:11s; animation-delay:0s;"></div>
+<div class="vent" style="left:81%; height:110px; animation-duration:15s; animation-delay:6s;"></div>
+<div class="vent" style="left:92%; height:70px;  animation-duration:10s; animation-delay:2.5s;"></div>
+
+<!-- ════════════════════════════════════ -->
+<!-- MENÚ PRINCIPAL -->
+<!-- ════════════════════════════════════ -->
+<div id="main-menu" class="screen active">
+  <div id="main-title">Oxígeno Cero</div>
+  <div class="subtitle">· Nova Esperanza — 2189 — el aire ya no es de nadie ·</div>
+
+  <div class="menu-items" id="menu-items">
+    <!-- "Continuar" se inyecta por JS si hay guardado activo -->
+    <button class="menu-btn" onclick="showScreen('save-screen')">Iniciar&nbsp;Operación</button>
+    <div class="sep"></div>
+    <button class="menu-btn" onclick="showScreen('controls-screen')">Controles</button>
+    <div class="sep"></div>
+    <button class="menu-btn cerrar" onclick="showScreen('close-screen')">Cerrar&nbsp;Terminal</button>
+  </div>
+
+  <div class="menu-footer">© OXÍGENO CERO — versión 0.1 — TianMu Corp. todos los derechos reservados</div>
+</div>
+
+<!-- ════════════════════════════════════ -->
+<!-- SLOTS DE GUARDADO -->
+<!-- ════════════════════════════════════ -->
+<div id="save-screen" class="screen">
+  <div class="screen-title">▓ ARCHIVOS DE LA RESISTENCIA ▓</div>
+
+  <div class="slots-container" id="slots-container">
+    <!-- Generado por JS -->
+  </div>
+
+  <button class="back-btn" onclick="showScreen('main-menu')">← volver a la superficie</button>
+</div>
+
+<!-- ════════════════════════════════════ -->
+<!-- CONTROLES -->
+<!-- ════════════════════════════════════ -->
+<div id="controls-screen" class="screen">
+  <div class="screen-title">▓ CONTROLES ▓</div>
+
+  <div class="controls-grid" id="controls-grid">
+    <div class="ctrl-item">
+      <span class="ctrl-key">W</span>
+      <span class="ctrl-desc">Moverse arriba</span>
+    </div>
+    <div class="ctrl-item">
+      <span class="ctrl-key">S</span>
+      <span class="ctrl-desc">Moverse abajo</span>
+    </div>
+    <div class="ctrl-item">
+      <span class="ctrl-key">A</span>
+      <span class="ctrl-desc">Moverse izquierda</span>
+    </div>
+    <div class="ctrl-item">
+      <span class="ctrl-key">D</span>
+      <span class="ctrl-desc">Moverse derecha</span>
+    </div>
+    <div class="ctrl-item">
+      <span class="ctrl-key">BLOQ</span>
+      <span class="ctrl-desc">Correr (activar/desactivar)</span>
+    </div>
+    <div class="ctrl-item">
+      <span class="ctrl-key">ESC</span>
+      <span class="ctrl-desc">Pausa</span>
+    </div>
+    <div class="ctrl-item">
+      <span class="ctrl-key">🖱 IZQ</span>
+      <span class="ctrl-desc">Atacar</span>
+    </div>
+    <div class="ctrl-item">
+      <span class="ctrl-key">🖱 DER</span>
+      <span class="ctrl-desc">Bloquear</span>
+    </div>
+    <div class="ctrl-item">
+      <span class="ctrl-key">E</span>
+      <span class="ctrl-desc">Interactuar / hablar</span>
+    </div>
+    <div class="ctrl-item">
+      <span class="ctrl-key">Q</span>
+      <span class="ctrl-desc">Ver misiones</span>
+    </div>
+  </div>
+
+  <div class="ctrl-note">· más controles se revelarán durante la operación ·</div>
+  <button class="back-btn" style="margin-top:16px" onclick="showScreen('main-menu')">← volver a la superficie</button>
+</div>
+
+<!-- ════════════════════════════════════ -->
+<!-- PANTALLA CIERRE -->
+<!-- ════════════════════════════════════ -->
+<div id="close-screen" class="screen">
+  <div class="close-msg">Conexión perdida.<br>El aire también se acaba aquí.</div>
+  <div class="close-sub">· cerrá la pestaña si te atrevés a respirar afuera ·</div>
+  <button class="close-back" onclick="showScreen('main-menu')">↩ reconectar (si aún podés)</button>
+</div>
+
+<!-- ════════════════════════════════════ -->
+<!-- CONFIRM DIALOG -->
+<!-- ════════════════════════════════════ -->
+<div id="confirm-overlay">
+  <div class="confirm-box">
+    <h3>NUEVA OPERACIÓN</h3>
+    <p id="confirm-text">¿Iniciar una nueva operación<br>en este archivo?</p>
+    <div class="confirm-btns">
+      <button class="confirm-yes" id="confirm-yes-btn">SÍ</button>
+      <button class="confirm-no"  onclick="closeConfirm()">NO</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// PARTÍCULAS DE FONDO (gas tóxico / vapor verde-cian)
+// ════════════════════════════════════════════════════
+const canvas = document.getElementById('bg-canvas');
+const ctx    = canvas.getContext('2d');
+let W, H, particles = [];
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+function mkParticle() {
+  return {
+    x: Math.random() * W,
+    y: H + 10,
+    size: Math.random() * 3 + 0.6,
+    speed: Math.random() * 0.5 + 0.15,
+    drift: (Math.random() - 0.5) * 0.5,
+    alpha: Math.random() * 0.5 + 0.15,
+    color: Math.random() < 0.6
+      ? `rgba(57,${200+Math.random()*55|0},${110+Math.random()*60|0},`
+      : `rgba(${30+Math.random()*40|0},${190+Math.random()*50|0},${220+Math.random()*35|0},`
+  };
+}
+
+for (let i = 0; i < 110; i++) {
+  const p = mkParticle();
+  p.y = Math.random() * H;
+  particles.push(p);
+}
+
+function drawBg() {
+  // Fondo degradado frío-industrial
+  const grad = ctx.createRadialGradient(W*0.5,H*0.6,0, W*0.5,H*0.5,W*0.8);
+  grad.addColorStop(0,   'rgba(8,28,22,1)');
+  grad.addColorStop(0.5, 'rgba(4,12,10,1)');
+  grad.addColorStop(1,   'rgba(2,5,5,1)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+
+  // Veta verde tóxica tenue al fondo
+  const vein = ctx.createLinearGradient(0,H*0.3,W,H*0.7);
+  vein.addColorStop(0,   'rgba(57,255,140,0)');
+  vein.addColorStop(0.5, 'rgba(57,255,140,0.05)');
+  vein.addColorStop(1,   'rgba(57,255,140,0)');
+  ctx.fillStyle = vein;
+  ctx.fillRect(0,0,W,H);
+}
+
+function animLoop() {
+  drawBg();
+
+  // Partículas de gas ascendiendo
+  particles.forEach((p, i) => {
+    p.y     -= p.speed;
+    p.x     += p.drift + Math.sin(Date.now()*0.0008 + i)*0.2;
+    p.alpha -= 0.0006;
+
+    if (p.y < -10 || p.alpha <= 0) {
+      particles[i] = mkParticle();
+      return;
+    }
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    ctx.fillStyle = p.color + p.alpha + ')';
+    ctx.fill();
+  });
+
+  requestAnimationFrame(animLoop);
+}
+animLoop();
+
+// ════════════════════════════════════════════════════
+// SAVES — localStorage
+// ════════════════════════════════════════════════════
+const MAX_SLOTS = 5;
+
+function getSaves() {
+  return JSON.parse(localStorage.getItem('o2cero_saves') || '[]');
+}
+function setSaves(arr) {
+  localStorage.setItem('o2cero_saves', JSON.stringify(arr));
+}
+function getLastSave() {
+  return localStorage.getItem('o2cero_last_slot');
+}
+function setLastSave(id) {
+  localStorage.setItem('o2cero_last_slot', id);
+}
+
+// ════════════════════════════════════════════════════
+// NAVEGACIÓN DE PANTALLAS
+// ════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const target = document.getElementById(id);
+  if (target) target.classList.add('active');
+
+  if (id === 'save-screen')   renderSlots();
+  if (id === 'main-menu')     renderMenu();
+}
+
+// ════════════════════════════════════════════════════
+// MENÚ PRINCIPAL — botón Continuar dinámico
+// ════════════════════════════════════════════════════
+function renderMenu() {
+  const lastSlot = getLastSave();
+  const saves    = getSaves();
+  const hasLast  = lastSlot !== null && saves.find(s => s.id == lastSlot);
+  const items    = document.getElementById('menu-items');
+
+  items.innerHTML = '';
+
+  if (hasLast) {
+    const btn = document.createElement('button');
+    btn.className  = 'menu-btn continuar';
+    btn.textContent = 'Continuar';
+    btn.onclick    = () => startGame(parseInt(lastSlot), false);
+    items.appendChild(btn);
+    const sep = document.createElement('div');
+    sep.className = 'sep';
+    items.appendChild(sep);
+  }
+
+  items.innerHTML += `
+    <button class="menu-btn" onclick="showScreen('save-screen')">Iniciar&nbsp;Operación</button>
+    <div class="sep"></div>
+    <button class="menu-btn" onclick="showScreen('controls-screen')">Controles</button>
+    <div class="sep"></div>
+    <button class="menu-btn cerrar" onclick="showScreen('close-screen')">Cerrar&nbsp;Terminal</button>
+  `;
+}
+
+// ════════════════════════════════════════════════════
+// SLOTS DE GUARDADO
+// ════════════════════════════════════════════════════
+function renderSlots() {
+  const saves     = getSaves();
+  const container = document.getElementById('slots-container');
+  container.innerHTML = '';
+
+  for (let i = 1; i <= MAX_SLOTS; i++) {
+    const save = saves.find(s => s.id === i);
+    const div  = document.createElement('div');
+
+    if (save) {
+      div.className = 'slot used';
+      div.innerHTML = `
+        <div class="slot-header">
+          <span class="slot-num">◈ ARCHIVO ${i}</span>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="slot-date">${save.date}</span>
+            <button class="slot-delete" data-slot="${i}">✕ Borrar</button>
+          </div>
+        </div>
+        <div class="slot-info">
+          <span>📍 ${save.location || 'Zona desconocida'}</span>
+          <span>⏱ ${save.playtime || '00:00'}</span>
+          <span>◉ ${save.progress !== undefined ? save.progress : 0}% completado</span>
+        </div>`;
+      div.onclick = () => startGame(i, false);
+      div.querySelector('.slot-delete').addEventListener('click', e => {
+        e.stopPropagation();
+        openDeleteConfirm(i);
+      });
+    } else {
+      div.className = 'slot empty';
+      div.innerHTML = `
+        <div class="slot-header">
+          <span class="slot-num" style="color:#1a3a2c">◈ ARCHIVO ${i}</span>
+        </div>
+        <div style="margin-top:8px">
+          <div class="slot-empty-text">— vacío —</div>
+          <div class="slot-new-badge">▸ nueva operación</div>
+        </div>`;
+      div.onclick = () => openConfirm(i);
+    }
+
+    container.appendChild(div);
+  }
+}
+
+// ════════════════════════════════════════════════════
+// CONFIRM DIALOG
+// ════════════════════════════════════════════════════
+let pendingSlot = null;
+
+function openConfirm(slotId) {
+  pendingSlot = slotId;
+  document.getElementById('confirm-text').innerHTML =
+    `¿Iniciar una nueva operación<br>en el <b style="color:var(--verde-vivo)">Archivo ${slotId}</b>?`;
+  document.getElementById('confirm-overlay').classList.add('active');
+
+  document.getElementById('confirm-yes-btn').onclick = () => {
+    closeConfirm();
+    startGame(slotId, true);
+  };
+}
+function closeConfirm() {
+  document.getElementById('confirm-overlay').classList.remove('active');
+  pendingSlot = null;
+}
+
+function openDeleteConfirm(slotId) {
+  pendingSlot = slotId;
+  document.getElementById('confirm-overlay').querySelector('h3').textContent = 'BORRAR PROGRESO';
+  document.getElementById('confirm-text').innerHTML =
+    `¿Borrar el progreso del <b style="color:var(--alerta)">Archivo ${slotId}</b>?<br><span style="font-size:11px;color:#4a5a54">Esta acción no se puede deshacer.</span>`;
+  document.getElementById('confirm-yes-btn').style.color        = 'var(--alerta)';
+  document.getElementById('confirm-yes-btn').style.borderColor  = 'var(--alerta)';
+  document.getElementById('confirm-yes-btn').onclick = () => {
+    deleteSlot(slotId);
+    closeConfirm();
+    document.getElementById('confirm-overlay').querySelector('h3').textContent = 'NUEVA OPERACIÓN';
+    document.getElementById('confirm-yes-btn').style.color       = '';
+    document.getElementById('confirm-yes-btn').style.borderColor = '';
+  };
+  document.getElementById('confirm-overlay').classList.add('active');
+}
+
+function deleteSlot(slotId) {
+  const saves = getSaves().filter(s => s.id !== slotId);
+  setSaves(saves);
+  const last = getLastSave();
+  if (last == slotId) localStorage.removeItem('o2cero_last_slot');
+  // Borrar datos del juego para ese slot
+  localStorage.removeItem('o2cero_slot_' + slotId);
+  renderSlots();
+  renderMenu();
+}
+
+// ════════════════════════════════════════════════════
+// INICIAR / CARGAR JUEGO
+// ════════════════════════════════════════════════════
+function startGame(slotId, isNew) {
+  const saves = getSaves();
+
+  if (isNew) {
+    // Crear guardado nuevo
+    const now  = new Date();
+    const date = now.toLocaleDateString('es-AR', {day:'2-digit',month:'2-digit',year:'2-digit'});
+    const existing = saves.findIndex(s => s.id === slotId);
+    const saveObj  = {
+      id:       slotId,
+      date,
+      location: 'Plaza de Nova Esperanza',
+      playtime: '00:00',
+      progress: 0
+    };
+    if (existing >= 0) saves[existing] = saveObj;
+    else               saves.push(saveObj);
+    setSaves(saves);
+  }
+
+  setLastSave(slotId);
+  window.location.href = 'game.html?slot=' + slotId + '&new=' + (isNew ? '1' : '0');
+}
+
+// Init
+renderMenu();
+</script>
+</body>
+</html>

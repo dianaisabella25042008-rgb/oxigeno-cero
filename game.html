@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>OXÍGENO CERO</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#000; overflow:hidden; width:100vw; height:100vh; font-family:'Share Tech Mono',monospace; }
+    #game { display:block; width:100vw; height:100vh; }
+
+    #fade {
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      background:#000; z-index:50; pointer-events:none;
+      opacity:1; transition:opacity 1.2s ease;
+    }
+    #fade.clear { opacity:0; }
+
+    #tutorial-box {
+      position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+      text-align:center; z-index:20; pointer-events:none;
+      transition:opacity 0.6s;
+    }
+    #tutorial-box.hidden { opacity:0; pointer-events:none; }
+    .tut-line { font-size:10px; letter-spacing:2px; color:#4a6a56; text-transform:uppercase; line-height:1.8; }
+    .tut-line b { color:#39ff8c; opacity:0.8; }
+
+    #interact-prompt {
+      position:fixed; z-index:20; pointer-events:none;
+      font-family:'Orbitron',sans-serif; font-size:13px; letter-spacing:3px;
+      color:#2bd9ff; background:rgba(4,12,10,0.88);
+      border:1px solid rgba(43,217,255,0.5);
+      padding:6px 14px; white-space:nowrap;
+      text-shadow:0 0 8px rgba(43,217,255,0.6);
+      opacity:0; transition:opacity 0.3s;
+    }
+    #interact-prompt.show { opacity:1; }
+
+    #objective-hud {
+      position:fixed; top:8px; left:8px;
+      z-index:20; pointer-events:none;
+      font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:2px;
+      color:#39ff8c; text-transform:uppercase;
+      background:rgba(0,0,0,0.65); border:1px solid rgba(57,255,140,0.25);
+      padding:6px 14px;
+      opacity:0; transition:opacity 0.5s;
+    }
+
+    #caps-indicator {
+      position:fixed; top:20px; right:24px; z-index:20;
+      font-family:'Orbitron',sans-serif; font-size:11px; letter-spacing:3px;
+      padding:5px 12px; text-transform:uppercase;
+      opacity:0; transition:opacity 0.4s;
+      pointer-events:none;
+    }
+    #caps-indicator.walk { color:#7a9a8a; border:1px solid #2a4a3a; background:rgba(4,12,10,0.8); opacity:1; }
+    #caps-indicator.run  { color:#39ff8c; border:1px solid rgba(57,255,140,0.5); background:rgba(4,20,12,0.85); opacity:1;
+                           text-shadow:0 0 8px rgba(57,255,140,0.5); }
+
+    .overlay {
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      background:rgba(0,0,0,0.84); display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      z-index:30; opacity:0; pointer-events:none; transition:opacity 0.4s;
+    }
+    .overlay.show { opacity:1; pointer-events:all; }
+
+    .ov-title {
+      font-family:'Orbitron',sans-serif; font-weight:700;
+      font-size:clamp(18px,2.5vw,26px); letter-spacing:6px;
+      color:#39ff8c; text-transform:uppercase; margin-bottom:10px;
+      text-shadow:0 0 15px rgba(57,255,140,0.4);
+    }
+    .ov-sub { font-size:12px; letter-spacing:3px; color:#4a6a5a; text-transform:uppercase; margin-bottom:36px; }
+
+    /* ── HAIR SELECTION ── */
+    .hair-cards { display:flex; gap:48px; }
+    .hair-card {
+      display:flex; flex-direction:column; align-items:center; gap:14px;
+      cursor:pointer;
+    }
+    .hair-canvas-wrap {
+      width:160px; height:200px;
+      border:2px solid rgba(57,255,140,0.2);
+      background:rgba(8,18,14,0.9);
+      display:flex; align-items:center; justify-content:center;
+      transition:all 0.25s; overflow:hidden;
+    }
+    .hair-card:hover .hair-canvas-wrap {
+      border-color:#39ff8c;
+      box-shadow:0 0 20px rgba(57,255,140,0.35);
+    }
+    /* Borde verde apocalíptico para la opción masculina */
+    .hair-card-masc .hair-canvas-wrap {
+      border:2px solid rgba(57,255,140,0.55);
+      box-shadow:0 0 12px rgba(57,255,140,0.2), inset 0 0 18px rgba(57,255,140,0.06);
+    }
+    .hair-card-masc:hover .hair-canvas-wrap {
+      border-color:#39ff8c;
+      box-shadow:0 0 28px rgba(57,255,140,0.5), inset 0 0 20px rgba(57,255,140,0.1);
+    }
+    .hair-crop {
+      width:100%; height:100%;
+      background-repeat: no-repeat;
+      background-size: contain;
+      background-position: center;
+      image-rendering: pixelated;
+    }
+    .hair-crop-masc {
+      background-image: url('assets/pelo_hombre.png');
+    }
+    .hair-crop-fem {
+      background-image: url('assets/pelo_mujer.png');
+    }
+    .hair-label {
+      font-family:'Orbitron',sans-serif; font-size:13px;
+      letter-spacing:4px; color:#9fc9b8; text-transform:uppercase;
+    }
+
+    /* ── NAME INPUT ── */
+    #name-overlay input {
+      font-family:'Share Tech Mono',monospace; font-size:22px; letter-spacing:5px;
+      color:#39ff8c; background:rgba(8,18,14,0.9);
+      border:1px solid rgba(57,255,140,0.4);
+      padding:14px 24px; width:min(360px,80vw);
+      text-align:center; text-transform:uppercase; outline:none; margin-bottom:10px;
+    }
+    #name-overlay input:focus { border-color:#39ff8c; box-shadow:0 0 15px rgba(57,255,140,0.25); }
+    #name-overlay input::placeholder { color:#2a4a3a; }
+    .name-note { font-size:11px; letter-spacing:3px; color:#3a5a4a; text-transform:uppercase; margin-bottom:20px; }
+
+    .ov-btn {
+      font-family:'Orbitron',sans-serif; font-size:14px; letter-spacing:5px;
+      color:#39ff8c; background:none; border:1px solid rgba(57,255,140,0.5);
+      padding:10px 36px; cursor:pointer; text-transform:uppercase; transition:all 0.2s;
+    }
+    .ov-btn:hover { background:rgba(57,255,140,0.1); box-shadow:0 0 15px rgba(57,255,140,0.3); }
+    .ov-btn:disabled { color:#2a4a3a; border-color:#1a3a2c; cursor:not-allowed; }
+
+    /* ── ORIENTATION ── */
+    .ov-question {
+      font-size:16px; letter-spacing:2px; color:#9fc9b8;
+      text-align:center; margin-bottom:36px; max-width:500px; line-height:1.7;
+    }
+    .orient-options { display:flex; gap:20px; flex-wrap:wrap; justify-content:center; }
+    .orient-btn {
+      font-family:'Orbitron',sans-serif; font-size:13px; letter-spacing:4px;
+      color:#7a9a8a; background:rgba(8,18,14,0.9);
+      border:1px solid rgba(57,255,140,0.2); padding:12px 28px;
+      cursor:pointer; text-transform:uppercase; transition:all 0.2s;
+    }
+    .orient-btn:hover { color:#39ff8c; border-color:#39ff8c; box-shadow:0 0 14px rgba(57,255,140,0.3); }
+
+    #hud-name {
+      position:fixed; top:46px; left:8px; z-index:20;
+      pointer-events:none; opacity:0; transition:opacity 0.6s;
+    }
+    #hud-name .hud-label { font-size:10px; letter-spacing:3px; color:#4a6a5a; text-transform:uppercase; }
+    #hud-name .hud-val {
+      font-family:'Orbitron',sans-serif; font-size:16px;
+      letter-spacing:3px; color:#39ff8c; text-shadow:0 0 10px rgba(57,255,140,0.4);
+    }
+    #hud-name.show { opacity:1; }
+
+    body::after {
+      content:''; position:fixed; top:0; left:0; width:100%; height:100%;
+      background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);
+      z-index:1; pointer-events:none;
+    }
+
+    /* ── D-PAD TÁCTIL ── */
+    #dpad {
+      position:fixed; bottom:24px; left:24px; z-index:40;
+      display:none; /* solo visible en touch */
+      width:150px; height:150px;
+    }
+    @media (pointer:coarse) { #dpad { display:block; } }
+
+    .dpad-btn {
+      position:absolute; width:46px; height:46px;
+      background:rgba(4,20,12,0.85); border:1px solid rgba(57,255,140,0.5);
+      color:#39ff8c; font-size:20px; display:flex; align-items:center; justify-content:center;
+      border-radius:6px; user-select:none; -webkit-user-select:none;
+      touch-action:none;
+    }
+    .dpad-btn:active { background:rgba(57,255,140,0.2); }
+    #dpad-up    { top:0;    left:52px; }
+    #dpad-down  { bottom:0; left:52px; }
+    #dpad-left  { top:52px; left:0;    }
+    #dpad-right { top:52px; left:104px;}
+
+    #btn-e {
+      position:fixed; bottom:24px; right:24px; z-index:40;
+      display:none;
+      width:64px; height:64px;
+      background:rgba(4,20,12,0.85); border:2px solid rgba(43,217,255,0.6);
+      color:#2bd9ff; font-family:'Orbitron',sans-serif; font-size:22px; font-weight:700;
+      border-radius:50%; align-items:center; justify-content:center;
+      user-select:none; -webkit-user-select:none; touch-action:none;
+    }
+    @media (pointer:coarse) { #btn-e { display:flex; } }
+    #btn-e:active { background:rgba(43,217,255,0.2); }
+  </style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+<div id="fade"></div>
+
+<div id="dpad">
+  <div class="dpad-btn" id="dpad-up">▲</div>
+  <div class="dpad-btn" id="dpad-left">◀</div>
+  <div class="dpad-btn" id="dpad-right">▶</div>
+  <div class="dpad-btn" id="dpad-down">▼</div>
+</div>
+<div id="btn-e">E</div>
+
+<div id="hud-name">
+  <div class="hud-label">Agente</div>
+  <div class="hud-val" id="hud-name-val">—</div>
+</div>
+
+<div id="caps-indicator">Caminando</div>
+
+<div id="tutorial-box">
+  <div class="tut-line">Mover: <b>W A S D</b></div>
+  <div class="tut-line">Correr: <b>BLOQ MAYÚS</b> (activar/desactivar)</div>
+  <div class="tut-line" id="tut-interact" style="opacity:0;transition:opacity 0.4s">Interactuar: <b>E</b></div>
+</div>
+
+<div id="interact-prompt">E — Interactuar</div>
+<div id="objective-hud"></div>
+
+<!-- OVERLAY: Peinado -->
+<div class="overlay" id="hair-overlay">
+  <div class="ov-title">Elegí tu peinado</div>
+  <div class="ov-sub">· define quién sos ·</div>
+  <div class="hair-cards">
+    <div class="hair-card hair-card-masc" onclick="selectHair('masc')">
+      <div class="hair-canvas-wrap">
+        <div class="hair-crop hair-crop-masc"></div>
+      </div>
+      <div class="hair-label">Masculino</div>
+    </div>
+    <div class="hair-card hair-card-masc" onclick="selectHair('fem')">
+      <div class="hair-canvas-wrap">
+        <div class="hair-crop hair-crop-fem"></div>
+      </div>
+      <div class="hair-label">Femenino</div>
+    </div>
+  </div>
+</div>
+
+<!-- OVERLAY: Nombre -->
+<div class="overlay" id="name-overlay">
+  <div class="ov-title">¿Cómo te llamás?</div>
+  <div class="ov-sub">· tu nombre quedará registrado en la resistencia ·</div>
+  <input id="name-input" type="text" maxlength="18" placeholder="INGRESÁ TU NOMBRE" autocomplete="off" spellcheck="false"/>
+  <div class="name-note">Presioná ENTER o el botón para confirmar</div>
+  <button class="ov-btn" id="name-confirm-btn" onclick="confirmName()" disabled>Confirmar</button>
+</div>
+
+<!-- OVERLAY: Orientación -->
+<div class="overlay" id="orientation-overlay">
+  <div class="ov-title">Una pregunta más</div>
+  <div class="ov-sub">· tu respuesta quedará en silencio ·</div>
+  <div class="ov-question">Si tuvieras una pareja...<br>¿de qué género sería?</div>
+  <div class="orient-options">
+    <button class="orient-btn" onclick="selectOrientation('hombre')">Hombre</button>
+    <button class="orient-btn" onclick="selectOrientation('mujer')">Mujer</button>
+    <button class="orient-btn" onclick="selectOrientation('cualquiera')">Cualquiera</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// URL PARAMS
+// ══════════════════════════════════════════
+const params = new URLSearchParams(location.search);
+const slotId = parseInt(params.get('slot')) || 1;
+const isNew  = params.get('new') === '1';
+
+// ══════════════════════════════════════════
+// CANVAS
+// ══════════════════════════════════════════
+const canvas = document.getElementById('game');
+const ctx    = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ══════════════════════════════════════════
+// ASSETS
+// ══════════════════════════════════════════
+const mapImg   = new Image();
+const pelosImg = new Image();
+let pelosLoaded = false;
+
+pelosImg.src = 'assets/pelos.png';
+
+// ══════════════════════════════════════════
+// COLISIONES — porcentajes del canvas (mapa 1402x1122)
+// ══════════════════════════════════════════
+function inWalkable(px, py) {
+  // Cuerpo central (entre los dos nichos superiores)
+  const main      = px >= 0.166 && px <= 0.810 && py >= 0.157 && py <= 0.682;
+  // Zona derecha (debajo del nicho de oxígeno, arriba-der)
+  const rightZone = px >= 0.810 && px <= 0.922 && py >= 0.283 && py <= 0.678;
+  // Zona izquierda (debajo del nicho de la alacena, arriba-izq)
+  const leftZone  = px >= 0.058 && px <= 0.166 && py >= 0.285 && py <= 0.682;
+  // Vestíbulo (pasillo inferior con la puerta)
+  const vestibule = px >= 0.355 && px <= 0.816 && py >= 0.678 && py <= 0.741;
+  return main || rightZone || leftZone || vestibule;
+}
+
+// [x1, y1, x2, y2] como fracción del canvas
+const FURNITURE = [
+  // Zonas contra la pared superior
+  [0.680, 0.157, 0.800, 0.187],  // obstáculo arriba-der
+  [0.198, 0.157, 0.302, 0.200],  // obstáculo arriba-izq
+  [0.680, 0.519, 0.768, 0.677],  // cama
+  [0.800, 0.532, 0.834, 0.584],  // mesita de noche
+  [0.390, 0.422, 0.470, 0.509],  // mesa
+  [0.388, 0.358, 0.422, 0.368],  // silla 1 (arriba de la mesa)
+  [0.413, 0.530, 0.447, 0.540],  // silla 2 (abajo de la mesa)
+  [0.177, 0.640, 0.211, 0.650],  // objeto pos 0.194
+  [0.140, 0.640, 0.163, 0.650],  // objeto pos 0.146
+];
+
+function hitsFurniture(px, py) {
+  for (const [x1, y1, x2, y2] of FURNITURE) {
+    if (px < x2 && px > x1 - PW/W && py < y2 && py > y1 - PH/H) return true;
+  }
+  return false;
+}
+
+function canMoveTo(x, y) {
+  const px = x / W, py = y / H;
+  return inWalkable(px, py) && !hitsFurniture(px, py);
+}
+
+// ══════════════════════════════════════════
+// ESTADO
+// ══════════════════════════════════════════
+let gState = 'tutorial';
+
+// ══════════════════════════════════════════
+// JUGADOR
+// ══════════════════════════════════════════
+const SPEED_WALK = 2;
+const SPEED_RUN  = 5;
+const PW = 22, PH = 34;
+
+const player = {
+  x: 0, y: 0,
+  hairChoice: null,
+  playerName: '',
+  orientation: null,
+};
+
+let capsLock  = false;
+let isMoving  = false;
+
+const SPAWN_X = 0.450, SPAWN_Y = 0.670;  // centro-izq, delante de la cama
+const CHEST_X = 0.138, CHEST_Y = 0.660;  // centro real del cofre
+const DOOR_X  = 0.475, DOOR_Y  = 0.730;  // puerta vestíbulo
+const INTERACT_RADIUS = 100;
+const DOOR_RADIUS = window.matchMedia('(pointer:coarse)').matches ? 200 : 100;
+
+// ══════════════════════════════════════════
+// TECLADO
+// ══════════════════════════════════════════
+const keys = {};
+
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'CapsLock') toggleCaps();
+  if (e.code === 'KeyE')   handleInteract();
+  if (e.code === 'Enter' && gState === 'name_input') confirmName();
+  // bloquear scroll con flechas
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ── CONTROLES TÁCTILES ──
+const dpadMap = {
+  'dpad-up':    'KeyW',
+  'dpad-down':  'KeyS',
+  'dpad-left':  'KeyA',
+  'dpad-right': 'KeyD',
+};
+Object.entries(dpadMap).forEach(([id, code]) => {
+  const el = document.getElementById(id);
+  el.addEventListener('touchstart', e => { e.preventDefault(); keys[code] = true;  }, { passive:false });
+  el.addEventListener('touchend',   e => { e.preventDefault(); keys[code] = false; }, { passive:false });
+  el.addEventListener('touchcancel',e => { e.preventDefault(); keys[code] = false; }, { passive:false });
+});
+document.getElementById('btn-e').addEventListener('touchstart', e => { e.preventDefault(); handleInteract(); }, { passive:false });
+
+function toggleCaps() {
+  capsLock = !capsLock;
+  const ind = document.getElementById('caps-indicator');
+  ind.textContent = capsLock ? 'Corriendo' : 'Caminando';
+  ind.className   = capsLock ? 'run' : 'walk';
+}
+
+// ══════════════════════════════════════════
+// MOVIMIENTO + COLISIÓN
+// ══════════════════════════════════════════
+function updatePlayer() {
+  if (gState !== 'tutorial' && gState !== 'free_roam') return;
+
+  const speed = capsLock ? SPEED_RUN : SPEED_WALK;
+  let dx = 0, dy = 0;
+
+  if (keys['KeyW'] || keys['ArrowUp'])    dy = -speed;
+  if (keys['KeyS'] || keys['ArrowDown'])  dy =  speed;
+  if (keys['KeyA'] || keys['ArrowLeft'])  dx = -speed;
+  if (keys['KeyD'] || keys['ArrowRight']) dx =  speed;
+
+  isMoving = dx !== 0 || dy !== 0;
+
+  // Mover X e Y por separado para deslizarse en paredes
+  if (dx !== 0 && canMoveTo(player.x + dx, player.y)) player.x += dx;
+  if (dy !== 0 && canMoveTo(player.x, player.y + dy)) player.y += dy;
+}
+
+// ══════════════════════════════════════════
+// PROXIMIDAD
+// ══════════════════════════════════════════
+function distTo(pctX, pctY) {
+  return Math.hypot((player.x + PW/2) - pctX*W, (player.y + PH/2) - pctY*H);
+}
+
+function getNearby() {
+  if (gState === 'tutorial' && distTo(CHEST_X, CHEST_Y) < INTERACT_RADIUS) return 'chest';
+  if (gState === 'free_roam' && distTo(DOOR_X,  DOOR_Y)  < DOOR_RADIUS) return 'door';
+  return null;
+}
+
+// ══════════════════════════════════════════
+// INTERACCIÓN
+// ══════════════════════════════════════════
+function handleInteract() {
+  const near = getNearby();
+  if (!near) return;
+  if (near === 'chest') { gState = 'hair_choice'; showOverlay('hair-overlay'); }
+  if (near === 'door')  { gState = 'orientation'; showOverlay('orientation-overlay'); }
+}
+
+
+// ══════════════════════════════════════════
+// SELECCIÓN DE PELO
+// ══════════════════════════════════════════
+function selectHair(choice) {
+  player.hairChoice = choice;
+  saveProgress({ hairChoice: choice });
+  hideOverlay('hair-overlay');
+  gState = 'name_input';
+  showOverlay('name-overlay');
+  setTimeout(() => document.getElementById('name-input').focus(), 300);
+}
+
+// ══════════════════════════════════════════
+// NOMBRE
+// ══════════════════════════════════════════
+const nameInput = document.getElementById('name-input');
+const nameBtn   = document.getElementById('name-confirm-btn');
+nameInput.addEventListener('input', () => { nameBtn.disabled = nameInput.value.trim().length < 2; });
+
+function confirmName() {
+  const val = nameInput.value.trim();
+  if (val.length < 2) return;
+  player.playerName = val.toUpperCase();
+  saveProgress({ playerName: player.playerName });
+  hideOverlay('name-overlay');
+  document.getElementById('hud-name-val').textContent = player.playerName;
+  document.getElementById('hud-name').classList.add('show');
+  document.getElementById('tutorial-box').classList.add('hidden');
+  gState = 'free_roam';
+}
+
+// ══════════════════════════════════════════
+// ORIENTACIÓN
+// ══════════════════════════════════════════
+function selectOrientation(choice) {
+  player.orientation = choice;
+  hideOverlay('orientation-overlay');
+  saveAndTransition();
+}
+
+// ══════════════════════════════════════════
+// GUARDAR PROGRESO PARCIAL
+// ══════════════════════════════════════════
+function saveProgress(fields) {
+  const saves = JSON.parse(localStorage.getItem('o2cero_saves') || '[]');
+  const idx   = saves.findIndex(s => s.id === slotId);
+  if (idx >= 0) Object.assign(saves[idx], fields);
+  localStorage.setItem('o2cero_saves', JSON.stringify(saves));
+}
+
+// ══════════════════════════════════════════
+// GUARDAR Y TRANSICIONAR
+// ══════════════════════════════════════════
+function saveAndTransition() {
+  const saves = JSON.parse(localStorage.getItem('o2cero_saves') || '[]');
+  const idx   = saves.findIndex(s => s.id === slotId);
+  if (idx >= 0) {
+    saves[idx].playerName  = player.playerName;
+    saves[idx].hairChoice  = player.hairChoice;
+    saves[idx].orientation = player.orientation;
+    saves[idx].location    = 'Nova Esperanza — Prólogo';
+    saves[idx].progress    = 1;
+    saves[idx].scene       = 'prologue';
+  }
+  localStorage.setItem('o2cero_saves', JSON.stringify(saves));
+
+  gState = 'done';
+  const fade = document.getElementById('fade');
+  fade.style.transition = 'opacity 1.5s ease';
+  fade.classList.remove('clear');
+
+  setTimeout(() => showPrologue(), 1600);
+}
+
+function showPrologue() {
+  document.body.innerHTML = `
+    <div style="width:100vw;height:100vh;background:#020a06;display:flex;flex-direction:column;
+                align-items:center;justify-content:center;gap:24px;">
+      <div style="font-family:'Orbitron',sans-serif;font-size:clamp(16px,3vw,30px);
+                  color:#39ff8c;letter-spacing:8px;text-shadow:0 0 20px rgba(57,255,140,0.4)">
+        PRÓLOGO
+      </div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:14px;
+                  color:#4a6a5a;letter-spacing:3px;text-align:center;max-width:500px;line-height:1.8">
+        LA BATALLA DE LA PLAZA<br><span style="color:#2a4a3a">— próximamente —</span>
+      </div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:12px;
+                  color:#2a4a3a;letter-spacing:2px;text-align:center;margin-top:20px">
+        Agente: <span style="color:#39ff8c">${player.playerName}</span> &nbsp;|&nbsp;
+        Género: <span style="color:#39ff8c">${player.hairChoice==='masc'?'Masculino':'Femenino'}</span> &nbsp;|&nbsp;
+        Pareja: <span style="color:#39ff8c">${player.orientation}</span>
+      </div>
+      <button onclick="location.href='index.html'" style="margin-top:40px;font-family:'Orbitron',sans-serif;
+        font-size:13px;letter-spacing:4px;color:#2a4a3a;background:none;border:none;cursor:pointer;text-transform:uppercase;">
+        ← Volver al menú
+      </button>
+    </div>`;
+}
+
+// ══════════════════════════════════════════
+// OVERLAYS
+// ══════════════════════════════════════════
+function showOverlay(id) { document.getElementById(id).classList.add('show'); }
+function hideOverlay(id) { document.getElementById(id).classList.remove('show'); }
+
+// ══════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Mapa
+  if (mapImg.complete && mapImg.naturalWidth > 0) {
+    ctx.drawImage(mapImg, 0, 0, W, H);
+  } else {
+    ctx.fillStyle = '#0a1410';
+    ctx.fillRect(0, 0, W, H);
+  }
+
+
+
+  // Personaje placeholder (TODO: sprite sheet)
+  ctx.fillStyle   = capsLock && isMoving ? '#00ffaa' : '#39ff8c';
+  ctx.shadowColor = 'rgba(57,255,140,0.8)';
+  ctx.shadowBlur  = capsLock ? 18 : 10;
+  ctx.fillRect(player.x, player.y, PW, PH);
+  ctx.shadowBlur = 0;
+
+  // Prompt de interacción
+  updateInteractPrompt();
+}
+
+function updateInteractPrompt() {
+  const prompt   = document.getElementById('interact-prompt');
+  const objective = document.getElementById('objective-hud');
+  const near     = getNearby();
+
+  // Objetivo arriba al centro
+  if (gState === 'tutorial') {
+    objective.textContent = '▸ Objetivo: abrí el cofre';
+    objective.style.opacity = '1';
+  } else if (gState === 'free_roam') {
+    objective.textContent = '▸ Objetivo: salí por la puerta';
+    objective.style.opacity = '1';
+  } else {
+    objective.style.opacity = '0';
+  }
+
+  // Prompt de interacción solo cuando está cerca
+  if (near) {
+    prompt.textContent = near === 'chest' ? 'E — Abrir cofre' : 'E — Salir';
+    prompt.classList.add('show');
+    const ox = (near === 'chest' ? CHEST_X : DOOR_X) * W;
+    const oy = (near === 'chest' ? CHEST_Y : DOOR_Y) * H;
+    prompt.style.left = (ox - prompt.offsetWidth / 2) + 'px';
+    prompt.style.top  = (oy - 52) + 'px';
+    if (gState === 'tutorial') document.getElementById('tut-interact').style.opacity = '1';
+  } else {
+    prompt.classList.remove('show');
+    if (gState === 'tutorial') document.getElementById('tut-interact').style.opacity = '0';
+  }
+}
+
+// ══════════════════════════════════════════
+// LOOP
+// ══════════════════════════════════════════
+function loop() {
+  updatePlayer();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+function init() {
+  player.x = SPAWN_X * W - PW / 2;
+  player.y = SPAWN_Y * H - PH / 2;
+
+  if (!isNew) {
+    const saves = JSON.parse(localStorage.getItem('o2cero_saves') || '[]');
+    const idx   = saves.findIndex(s => s.id === slotId);
+    const save  = saves[idx];
+    if (save) {
+      player.hairChoice  = save.hairChoice  || null;
+      player.playerName  = save.playerName  || '';
+      player.orientation = save.orientation || null;
+
+      if (save.hairChoice && save.playerName) {
+        // Tutorial completo → roam libre
+        document.getElementById('hud-name-val').textContent = player.playerName;
+        document.getElementById('hud-name').classList.add('show');
+        document.getElementById('tutorial-box').classList.add('hidden');
+        gState = 'free_roam';
+
+      } else if (save.hairChoice && !save.playerName) {
+        // Eligió pelo pero no puso nombre → input de nombre
+        document.getElementById('tutorial-box').classList.add('hidden');
+        gState = 'name_input';
+        showOverlay('name-overlay');
+        setTimeout(() => document.getElementById('name-input').focus(), 300);
+
+      } else {
+        // Save corrupto o sin progreso → resetear y empezar tutorial limpio
+        saves[idx].hairChoice  = null;
+        saves[idx].playerName  = '';
+        saves[idx].orientation = null;
+        localStorage.setItem('o2cero_saves', JSON.stringify(saves));
+        player.hairChoice = null;
+        player.playerName = '';
+        gState = 'tutorial';
+      }
+    }
+  }
+
+  loop();
+
+  // Fade in — doble rAF para que el browser pinte el frame negro primero
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.getElementById('fade').classList.add('clear');
+  }));
+}
+
+let _started = false;
+function safeInit() {
+  if (_started) return;
+  _started = true;
+  init();
+}
+
+mapImg.onload  = safeInit;
+mapImg.onerror = safeInit;
+mapImg.src     = 'assets/mapa.jpg';
+if (mapImg.complete && mapImg.naturalWidth > 0) safeInit();
+</script>
+</body>
+</html>
