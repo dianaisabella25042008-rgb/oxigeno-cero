@@ -307,16 +307,28 @@ pelosImg.src = 'assets/pelos.png';
 // ══════════════════════════════════════════
 // COLISIONES — porcentajes del canvas (mapa 1402x1122)
 // ══════════════════════════════════════════
-function inWalkable(px, py) {
-  // Cuerpo central (entre los dos nichos superiores)
+// ── ZONA VISIBLE (el personaje se dibuja normalmente) ──
+function isVisible(px, py) {
   const main      = px >= 0.166 && px <= 0.810 && py >= 0.157 && py <= 0.682;
-  // Zona derecha (debajo del nicho de oxígeno, arriba-der)
-  const rightZone = px >= 0.810 && px <= 0.922 && py >= 0.283 && py <= 0.678;
-  // Zona izquierda (debajo del nicho de la alacena, arriba-izq)
-  const leftZone  = px >= 0.058 && px <= 0.166 && py >= 0.285 && py <= 0.682;
-  // Vestíbulo (pasillo inferior con la puerta)
-  const vestibule = px >= 0.355 && px <= 0.816 && py >= 0.678 && py <= 0.741;
+  const rightZone = px >= 0.810 && px <= 0.921 && py >= 0.283 && py <= 0.678;
+  const leftZone  = px >= 0.059 && px <= 0.166 && py >= 0.285 && py <= 0.682;
+  const vestibule = px >= 0.355 && px <= 0.816 && py >  0.682 && py <= 0.741;
   return main || rightZone || leftZone || vestibule;
+}
+
+// ── LÍMITE REAL DEL MAPA (hasta donde puede moverse) ──
+function inWalkable(px, py) {
+  // Zonas superiores visibles
+  const topMain  = px >= 0.166 && px <= 0.810 && py >= 0.157 && py <= 0.682;
+  const topRight = px >= 0.810 && px <= 0.921 && py >= 0.283 && py <= 0.678;
+  const topLeft  = px >= 0.059 && px <= 0.166 && py >= 0.285 && py <= 0.682;
+  // Zonas inferiores (detrás de paredes)
+  const botMain  = px >= 0.144 && px <= 0.847 && py >  0.682 && py <= 0.841;
+  const botLeft  = px >= 0.059 && px <= 0.144 && py >  0.682 && py <= 0.788;
+  const botRight = px >= 0.810 && px <= 0.921 && py >  0.678 && py <= 0.788;
+  // Vestíbulo extendido (pasillo profundo)
+  const vestibule = px >= 0.339 && px <= 0.831 && py >  0.841 && py <= 0.898;
+  return topMain || topRight || topLeft || botMain || botLeft || botRight || vestibule;
 }
 
 // [x1, y1, x2, y2] como fracción del canvas
@@ -324,9 +336,9 @@ const FURNITURE = [
   // Zonas contra la pared superior
   [0.680, 0.157, 0.800, 0.187],  // obstáculo arriba-der
   [0.198, 0.157, 0.302, 0.200],  // obstáculo arriba-izq
-  [0.680, 0.519, 0.768, 0.677],  // cama
+  [0.680, 0.519, 0.779, 0.682],  // cama
   [0.800, 0.532, 0.834, 0.584],  // mesita de noche
-  [0.390, 0.422, 0.470, 0.509],  // mesa
+  [0.390, 0.422, 0.485, 0.499],  // mesa
   [0.388, 0.358, 0.422, 0.368],  // silla 1 (arriba de la mesa)
   [0.413, 0.530, 0.447, 0.540],  // silla 2 (abajo de la mesa)
   [0.177, 0.640, 0.211, 0.650],  // objeto pos 0.194
@@ -367,11 +379,11 @@ const player = {
 let capsLock  = false;
 let isMoving  = false;
 
-const SPAWN_X = 0.450, SPAWN_Y = 0.670;  // centro-izq, delante de la cama
+const SPAWN_X = 0.520, SPAWN_Y = 0.600;  // zona libre entre mesa y cama
 const CHEST_X = 0.138, CHEST_Y = 0.660;  // centro real del cofre
 const DOOR_X  = 0.475, DOOR_Y  = 0.730;  // puerta vestíbulo
 const INTERACT_RADIUS = 100;
-const DOOR_RADIUS = window.matchMedia('(pointer:coarse)').matches ? 200 : 100;
+const DOOR_RADIUS = window.matchMedia('(pointer:coarse)').matches ? 150 : 80;
 
 // ══════════════════════════════════════════
 // TECLADO
@@ -576,12 +588,56 @@ function draw() {
 
 
 
-  // Personaje placeholder (TODO: sprite sheet)
+  // Personaje — siempre dibujado; la pared se redibuja encima para taparlo
+  const _px = player.x / W, _py = player.y / H;
+
   ctx.fillStyle   = capsLock && isMoving ? '#00ffaa' : '#39ff8c';
   ctx.shadowColor = 'rgba(57,255,140,0.8)';
   ctx.shadowBlur  = capsLock ? 18 : 10;
   ctx.fillRect(player.x, player.y, PW, PH);
-  ctx.shadowBlur = 0;
+  ctx.shadowBlur  = 0;
+
+  // Capa de pared encima: clip desplazado PH hacia abajo para que el corte empiece
+  // cuando el borde superior del personaje cruza la pared (igual que el fade anterior)
+  if (mapImg.complete && mapImg.naturalWidth > 0) {
+    const iW    = mapImg.naturalWidth, iH = mapImg.naturalHeight;
+    const wallY = Math.round(0.682 * H);
+    const clipY = wallY + PH;                    // clip arranca cuando cabeza llega a wallY
+    const vestL = Math.round(0.355 * W);
+    const vestR = Math.round(0.829 * W);
+    const vestB = Math.round(0.741 * H) + PH;   // mismo ajuste para vestibulo
+    const srcY  = Math.round(0.682 * iH);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0,     clipY, vestL,     vestB - clipY); // muro izquierdo
+    ctx.rect(vestR, clipY, W - vestR, vestB - clipY); // muro derecho
+    ctx.rect(0,     vestB, W,         H - vestB);     // debajo del vestibulo
+    ctx.clip();
+    ctx.drawImage(mapImg, 0, srcY, iW, iH - srcY, 0, wallY, W, H - wallY);
+    ctx.restore();
+  }
+
+  // Flechita cuando está completamente detrás de la pared
+  if (!isVisible(_px, _py)) {
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = 'rgba(200,255,220,1)';
+    const cx = player.x + PW / 2;
+    const cy = player.y - 10;
+    ctx.beginPath();
+    ctx.moveTo(cx,     cy + 10);
+    ctx.lineTo(cx - 7, cy);
+    ctx.lineTo(cx + 7, cy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // DEBUG — pos para calibrar
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.fillRect(6, H - 38, 340, 32);
+  ctx.fillStyle = '#39ff8c';
+  ctx.font = '13px monospace';
+  ctx.fillText(`pos:(${(player.x/W).toFixed(3)}, ${(player.y/H).toFixed(3)})`, 12, H - 17);
 
   // Prompt de interacción
   updateInteractPrompt();
@@ -690,5 +746,6 @@ mapImg.onerror = safeInit;
 mapImg.src     = 'assets/mapa.jpg';
 if (mapImg.complete && mapImg.naturalWidth > 0) safeInit();
 </script>
+<div style="position:fixed;bottom:8px;right:12px;font-size:10px;color:rgba(255,255,255,0.13);pointer-events:none;user-select:none;font-family:sans-serif;letter-spacing:0.03em;">Elaborado por R<sup>2</sup>yS<sup>3</sup></div>
 </body>
 </html>
