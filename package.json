@@ -2,7 +2,7 @@
   "name": "oxigeno-cero",
   "version": "1.0.0",
   "scripts": {
-    "start": "serve . --listen $PORT"
+    "start": "serve . -l tcp://0.0.0.0:$PORT"
   },
   "dependencies": {
     "serve": "^14.2.4"
