@@ -612,8 +612,23 @@ function draw() {
     ctx.rect(0,     clipY, vestL,     vestB - clipY); // muro izquierdo
     ctx.rect(vestR, clipY, W - vestR, vestB - clipY); // muro derecho
     ctx.rect(0,     vestB, W,         H - vestB);     // debajo del vestibulo
-    ctx.clip();
+    // hueco triangular ventana (even-odd lo convierte en agujero)
+    ctx.moveTo(0.693 * W, 0.851 * H);
+    ctx.lineTo(0.722 * W, 0.851 * H);
+    ctx.lineTo(0.722 * W, 0.864 * H);
+    ctx.closePath();
+    ctx.clip('evenodd');
     ctx.drawImage(mapImg, 0, srcY, iW, iH - srcY, 0, wallY, W, H - wallY);
+    ctx.restore();
+    // tinte del hueco: beige-marron oscuro semitransparente
+    ctx.save();
+    ctx.fillStyle = 'rgba(72, 48, 28, 0.72)';
+    ctx.beginPath();
+    ctx.moveTo(0.693 * W, 0.851 * H);
+    ctx.lineTo(0.722 * W, 0.851 * H);
+    ctx.lineTo(0.722 * W, 0.864 * H);
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
   }
 
