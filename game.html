@@ -304,40 +304,66 @@ let pelosLoaded = false;
 
 pelosImg.src = 'assets/pelos.png';
 
+// Frames de animacion del personaje — 4 direcciones × idle + walk + atk
+const DIRS = ['up','down','left','right'];
+function loadSpriteSet(prefix) {
+  const set = {};
+  DIRS.forEach(dir => {
+    const idleImg = new Image(); idleImg.src = `assets/frames/${prefix}idle_${dir}.png`;
+    set[`idle_${dir}`] = idleImg;
+    set[`walk_${dir}`] = Array.from({length:6}, (_,i) => { const img=new Image(); img.src=`assets/frames/${prefix}walk_${dir}_${i}.png`; return img; });
+    set[`atk_${dir}`]  = Array.from({length:6}, (_,i) => { const img=new Image(); img.src=`assets/frames/${prefix}atk_${dir}_${i}.png`;  return img; });
+  });
+  return set;
+}
+const allSprites = {
+  pelado: loadSpriteSet(''),
+  masc:   loadSpriteSet('masc_'),
+  fem:    loadSpriteSet('fem_'),
+};
+let activeSprites = allSprites.pelado;
+
+let walkFrame = 0, walkTick = 0;
+let facing    = 'down';
+let isAttacking = false;
+let atkFrame  = 0, atkTick = 0;
+const WALK_FRAME_SPEED = 7;
+const ATK_FRAME_SPEED  = 5;
+
 // ══════════════════════════════════════════
 // COLISIONES — porcentajes del canvas (mapa 1402x1122)
 // ══════════════════════════════════════════
 // ── ZONA VISIBLE (el personaje se dibuja normalmente) ──
 function isVisible(px, py) {
-  const main      = px >= 0.166 && px <= 0.810 && py >= 0.157 && py <= 0.682;
-  const rightZone = px >= 0.810 && px <= 0.921 && py >= 0.283 && py <= 0.678;
+  const main      = px >= 0.166 && px <= 0.750 && py >= 0.157 && py <= 0.682;
+  const rightZone = px >= 0.750 && px <= 0.908 && py >= 0.283 && py <= 0.678;
   const leftZone  = px >= 0.059 && px <= 0.166 && py >= 0.285 && py <= 0.682;
-  const vestibule = px >= 0.355 && px <= 0.816 && py >  0.682 && py <= 0.741;
+  const vestibule = px >= 0.355 && px <= 0.816 && py >  0.682 && py <= 0.684;
   return main || rightZone || leftZone || vestibule;
 }
 
 // ── LÍMITE REAL DEL MAPA (hasta donde puede moverse) ──
 function inWalkable(px, py) {
   // Zonas superiores visibles
-  const topMain  = px >= 0.166 && px <= 0.810 && py >= 0.157 && py <= 0.682;
-  const topRight = px >= 0.810 && px <= 0.921 && py >= 0.283 && py <= 0.678;
+  const topMain  = px >= 0.166 && px <= 0.750 && py >= 0.157 && py <= 0.682;
+  const topRight = px >= 0.750 && px <= 0.908 && py >= 0.283 && py <= 0.678;
   const topLeft  = px >= 0.059 && px <= 0.166 && py >= 0.285 && py <= 0.682;
   // Zonas inferiores (detrás de paredes)
-  const botMain  = px >= 0.144 && px <= 0.847 && py >  0.682 && py <= 0.841;
-  const botLeft  = px >= 0.059 && px <= 0.144 && py >  0.682 && py <= 0.788;
-  const botRight = px >= 0.810 && px <= 0.921 && py >  0.678 && py <= 0.788;
+  const botMain  = px >= 0.144 && px <= 0.847 && py >  0.682 && py <= 0.784;
+  const botLeft  = px >= 0.059 && px <= 0.144 && py >  0.682 && py <= 0.731;
+  const botRight = px >= 0.750 && px <= 0.908 && py >  0.678 && py <= 0.731;
   // Vestíbulo extendido (pasillo profundo)
-  const vestibule = px >= 0.339 && px <= 0.831 && py >  0.841 && py <= 0.898;
+  const vestibule = px >= 0.339 && px <= 0.831 && py >  0.784 && py <= 0.841;
   return topMain || topRight || topLeft || botMain || botLeft || botRight || vestibule;
 }
 
 // [x1, y1, x2, y2] como fracción del canvas
 const FURNITURE = [
   // Zonas contra la pared superior
-  [0.680, 0.157, 0.800, 0.187],  // obstáculo arriba-der
+  [0.680, 0.157, 0.750, 0.187],  // obstáculo arriba-der
   [0.198, 0.157, 0.308, 0.200],  // obstáculo arriba-izq
   [0.680, 0.519, 0.779, 0.682],  // cama
-  [0.800, 0.532, 0.834, 0.584],  // mesita de noche
+  [0.750, 0.532, 0.834, 0.584],  // mesita de noche
   [0.390, 0.422, 0.485, 0.499],  // mesa
   [0.405, 0.378, 0.429, 0.382],  // silla 1 (arriba de la mesa)
   [0.432, 0.535, 0.456, 0.541],  // silla 2 (abajo de la mesa)
@@ -367,7 +393,8 @@ let gState = 'tutorial';
 // ══════════════════════════════════════════
 const SPEED_WALK = 2;
 const SPEED_RUN  = 5;
-const PW = 22, PH = 34;
+const PW = 36, PH = 66;           // caja de colision (calibrada con el mapa)
+const DPW = 58, DPH = 106;        // tamanio visual del sprite (mayor, sin tocar colisiones)
 
 const player = {
   x: 0, y: 0,
@@ -381,7 +408,7 @@ let isMoving  = false;
 
 const SPAWN_X = 0.520, SPAWN_Y = 0.600;  // zona libre entre mesa y cama
 const CHEST_X = 0.138, CHEST_Y = 0.660;  // centro real del cofre
-const DOOR_X  = 0.490, DOOR_Y  = 0.897;  // puerta vestíbulo
+const DOOR_X  = 0.490, DOOR_Y  = 0.831;  // puerta vestíbulo
 const INTERACT_RADIUS = 100;
 const DOOR_RADIUS = window.matchMedia('(pointer:coarse)').matches ? 60 : 35;
 
@@ -394,6 +421,7 @@ window.addEventListener('keydown', e => {
   keys[e.code] = true;
   if (e.code === 'CapsLock') toggleCaps();
   if (e.code === 'KeyE')   handleInteract();
+  // Space/F desactivado — ataque solo con mouse/touch
   if (e.code === 'Enter' && gState === 'name_input') confirmName();
   // bloquear scroll con flechas
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
@@ -414,6 +442,11 @@ Object.entries(dpadMap).forEach(([id, code]) => {
   el.addEventListener('touchcancel',e => { e.preventDefault(); keys[code] = false; }, { passive:false });
 });
 document.getElementById('btn-e').addEventListener('touchstart', e => { e.preventDefault(); handleInteract(); }, { passive:false });
+
+// Ataque con clic izquierdo del mouse (o touch en móvil)
+function triggerAttack() { if (!isAttacking) { isAttacking=true; atkFrame=0; atkTick=0; } }
+canvas.addEventListener('mousedown', e => { if (e.button === 0) triggerAttack(); });
+canvas.addEventListener('touchstart', e => { e.preventDefault(); triggerAttack(); }, { passive:false });
 
 function toggleCaps() {
   capsLock = !capsLock;
@@ -436,7 +469,31 @@ function updatePlayer() {
   if (keys['KeyA'] || keys['ArrowLeft'])  dx = -speed;
   if (keys['KeyD'] || keys['ArrowRight']) dx =  speed;
 
+  // Actualizar dirección segun input
+  if      (dy < 0) facing = 'up';
+  else if (dy > 0) facing = 'down';
+  else if (dx < 0) facing = 'left';
+  else if (dx > 0) facing = 'right';
+
   isMoving = dx !== 0 || dy !== 0;
+
+  // Avanzar animacion de caminar
+  if (isMoving) {
+    walkTick++;
+    if (walkTick >= WALK_FRAME_SPEED) { walkTick = 0; walkFrame = (walkFrame + 1) % 6; }
+  } else {
+    walkFrame = 0; walkTick = 0;
+  }
+
+  // Avanzar animacion de ataque
+  if (isAttacking) {
+    atkTick++;
+    if (atkTick >= ATK_FRAME_SPEED) {
+      atkTick = 0;
+      atkFrame++;
+      if (atkFrame >= 3) { isAttacking = false; atkFrame = 0; }
+    }
+  }
 
   // Mover X e Y por separado para deslizarse en paredes
   if (dx !== 0 && canMoveTo(player.x + dx, player.y)) player.x += dx;
@@ -474,9 +531,23 @@ function selectHair(choice) {
   player.hairChoice = choice;
   saveProgress({ hairChoice: choice });
   hideOverlay('hair-overlay');
-  gState = 'name_input';
-  showOverlay('name-overlay');
-  setTimeout(() => document.getElementById('name-input').focus(), 300);
+
+  // Fade a negro → cambiar sprites → fade de vuelta
+  const fade = document.getElementById('fade');
+  fade.style.transition = 'opacity 0.55s ease';
+  fade.classList.remove('clear');
+
+  setTimeout(() => {
+    activeSprites = choice === 'masc' ? allSprites.masc : allSprites.fem;
+    fade.style.transition = 'opacity 0.75s ease';
+    fade.classList.add('clear');
+  }, 650);
+
+  setTimeout(() => {
+    gState = 'name_input';
+    showOverlay('name-overlay');
+    setTimeout(() => document.getElementById('name-input').focus(), 300);
+  }, 1450);
 }
 
 // ══════════════════════════════════════════
@@ -484,7 +555,14 @@ function selectHair(choice) {
 // ══════════════════════════════════════════
 const nameInput = document.getElementById('name-input');
 const nameBtn   = document.getElementById('name-confirm-btn');
-nameInput.addEventListener('input', () => { nameBtn.disabled = nameInput.value.trim().length < 2; });
+nameInput.addEventListener('keydown', e => {
+  const allowed = /^[a-zA-ZáéíóúÁÉÍÓÚüÜñÑ\s]$/.test(e.key);
+  if (!allowed && e.key.length === 1) e.preventDefault();
+});
+nameInput.addEventListener('input', () => {
+  nameInput.value = nameInput.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚüÜñÑ\s]/g, '');
+  nameBtn.disabled = nameInput.value.trim().length < 2;
+});
 
 function confirmName() {
   const val = nameInput.value.trim();
@@ -591,21 +669,45 @@ function draw() {
   // Personaje — siempre dibujado; la pared se redibuja encima para taparlo
   const _px = player.x / W, _py = player.y / H;
 
-  ctx.fillStyle   = capsLock && isMoving ? '#00ffaa' : '#39ff8c';
-  ctx.shadowColor = 'rgba(57,255,140,0.8)';
-  ctx.shadowBlur  = capsLock ? 18 : 10;
-  ctx.fillRect(player.x, player.y, PW, PH);
-  ctx.shadowBlur  = 0;
+  // Ataque izquierda = mirror de ataque derecha
+  const atkKey = (isAttacking && facing === 'left') ? 'atk_right' : `atk_${facing}`;
+  const spriteImg = isAttacking
+    ? activeSprites[atkKey][atkFrame]
+    : isMoving
+      ? activeSprites[`walk_${facing}`][walkFrame]
+      : activeSprites[`idle_${facing}`];
+  if (spriteImg.complete && spriteImg.naturalWidth > 0) {
+    // DPH/DPW = tamanio visual; el sprite se centra sobre la caja de colision (PW/PH)
+    const atkH  = Math.round(DPH * 0.72);   // ataque mas compacto
+    const drawH = isAttacking ? atkH : DPH;
+    const drawW = isAttacking
+      ? Math.round(spriteImg.naturalWidth * atkH / spriteImg.naturalHeight)
+      : DPW;
+    // pies del sprite alineados con los pies de la caja de colision
+    const drawY = player.y + PH - drawH;
+    const drawX = player.x + PW / 2 - drawW / 2;
+    if (isAttacking && facing === 'left') {
+      ctx.save();
+      ctx.translate(drawX + drawW, drawY);
+      ctx.scale(-1, 1);
+      ctx.drawImage(spriteImg, 0, 0, drawW, drawH);
+      ctx.restore();
+    } else {
+      ctx.drawImage(spriteImg, drawX, drawY, drawW, drawH);
+    }
+  } else {
+    // sprite aun cargando — no dibujar nada
+  }
 
   // Capa de pared encima: clip desplazado PH hacia abajo para que el corte empiece
   // cuando el borde superior del personaje cruza la pared (igual que el fade anterior)
   if (mapImg.complete && mapImg.naturalWidth > 0) {
     const iW    = mapImg.naturalWidth, iH = mapImg.naturalHeight;
     const wallY = Math.round(0.682 * H);
-    const clipY = wallY + PH;                    // clip arranca cuando cabeza llega a wallY
+    const clipY = wallY + Math.round(PH * 0.5);
     const vestL = Math.round(0.355 * W);
     const vestR = Math.round(0.829 * W);
-    const vestB = Math.round(0.741 * H) + PH;   // mismo ajuste para vestibulo
+    const vestB = Math.round(0.684 * H) + PH;
     const srcY  = Math.round(0.682 * iH);
     ctx.save();
     ctx.beginPath();
@@ -637,7 +739,7 @@ function draw() {
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = 'rgba(200,255,220,1)';
     const cx = player.x + PW / 2;
-    const cy = player.y - 10;
+    const cy = player.y + PH - DPH - 10;
     ctx.beginPath();
     ctx.moveTo(cx,     cy + 10);
     ctx.lineTo(cx - 7, cy);
@@ -716,6 +818,7 @@ function init() {
 
       if (save.hairChoice && save.playerName) {
         // Tutorial completo → roam libre
+        activeSprites = save.hairChoice === 'masc' ? allSprites.masc : allSprites.fem;
         document.getElementById('hud-name-val').textContent = player.playerName;
         document.getElementById('hud-name').classList.add('show');
         document.getElementById('tutorial-box').classList.add('hidden');
@@ -723,6 +826,7 @@ function init() {
 
       } else if (save.hairChoice && !save.playerName) {
         // Eligió pelo pero no puso nombre → input de nombre
+        activeSprites = save.hairChoice === 'masc' ? allSprites.masc : allSprites.fem;
         document.getElementById('tutorial-box').classList.add('hidden');
         gState = 'name_input';
         showOverlay('name-overlay');
